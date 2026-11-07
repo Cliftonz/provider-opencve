@@ -1,0 +1,18 @@
+# SPDX-FileCopyrightText: 2026 The provider-opencve authors
+#
+# SPDX-License-Identifier: Apache-2.0
+
+apiVersion: meta.pkg.crossplane.io/v1
+kind: Provider
+metadata:
+  name: provider-opencve
+  annotations:
+    meta.crossplane.io/maintainer: https://github.com/Cliftonz
+    meta.crossplane.io/source: github.com/Cliftonz/provider-opencve
+    meta.crossplane.io/license: Apache-2.0
+    friendly-name.meta.crossplane.io: Provider OpenCVE
+spec:
+  crossplane:
+    version: ">=v2.0.0"
+  capabilities:
+    - SafeStart

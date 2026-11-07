@@ -1,0 +1,54 @@
+# SPDX-FileCopyrightText: 2026 The provider-opencve authors
+#
+# SPDX-License-Identifier: Apache-2.0
+
+apiVersion: project.opencve.m.clifton.quest/v1alpha1
+kind: Project
+metadata:
+  name: example-cvetracker-project
+  namespace: default
+  annotations:
+    meta.upbound.io/example-id: cvetracker/v1alpha1/cvetracker
+    uptest.upbound.io/pre-delete-hook: 'testhooks/cvetracker-api.sh updated || exit 1'
+spec:
+  providerConfigRef:
+    kind: ProviderConfig
+    name: default
+  forProvider:
+    name: example-cvetracker-project
+---
+apiVersion: subscription.opencve.m.clifton.quest/v1alpha1
+kind: ProjectSubscriptions
+metadata:
+  name: example-cvetracker-subscriptions
+  namespace: default
+  annotations:
+    meta.upbound.io/example-id: cvetracker/v1alpha1/cvetracker
+spec:
+  providerConfigRef:
+    kind: ProviderConfig
+    name: default
+  forProvider:
+    projectNameRef:
+      name: example-cvetracker-project
+    vendors:
+      - apache
+---
+apiVersion: cvetracker.opencve.m.clifton.quest/v1alpha1
+kind: CveTracker
+metadata:
+  name: example-cvetracker
+  namespace: default
+  annotations:
+    meta.upbound.io/example-id: cvetracker/v1alpha1/cvetracker
+    uptest.upbound.io/post-assert-hook: 'testhooks/cvetracker-api.sh'
+    uptest.upbound.io/update-parameter: '{"status":"resolved"}'
+spec:
+  providerConfigRef:
+    kind: ProviderConfig
+    name: default
+  forProvider:
+    projectNameRef:
+      name: example-cvetracker-project
+    cveId: CVE-2021-44228
+    status: analysis_in_progress

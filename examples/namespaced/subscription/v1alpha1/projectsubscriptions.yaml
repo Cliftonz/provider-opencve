@@ -1,0 +1,40 @@
+# SPDX-FileCopyrightText: 2026 The provider-opencve authors
+#
+# SPDX-License-Identifier: Apache-2.0
+
+apiVersion: project.opencve.m.clifton.quest/v1alpha1
+kind: Project
+metadata:
+  name: example-subscriptions-project
+  namespace: default
+  annotations:
+    meta.upbound.io/example-id: subscription/v1alpha1/projectsubscriptions
+    uptest.upbound.io/pre-delete-hook: 'testhooks/projectsubscriptions-api.sh updated || exit 1'
+spec:
+  providerConfigRef:
+    kind: ProviderConfig
+    name: default
+  forProvider:
+    name: example-subscriptions-project
+---
+apiVersion: subscription.opencve.m.clifton.quest/v1alpha1
+kind: ProjectSubscriptions
+metadata:
+  name: example-projectsubscriptions
+  namespace: default
+  annotations:
+    meta.upbound.io/example-id: subscription/v1alpha1/projectsubscriptions
+    uptest.upbound.io/post-assert-hook: 'testhooks/projectsubscriptions-api.sh'
+    uptest.upbound.io/post-delete-hook: 'testhooks/projectsubscriptions-api.sh deleted || exit 1'
+spec:
+  providerConfigRef:
+    kind: ProviderConfig
+    name: default
+  forProvider:
+    projectNameRef:
+      name: example-subscriptions-project
+    vendors:
+      - apache
+    products:
+      microsoft:
+        - windows

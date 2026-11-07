@@ -1,0 +1,17 @@
+# SPDX-FileCopyrightText: 2026 The provider-opencve authors
+#
+# SPDX-License-Identifier: Apache-2.0
+
+apiVersion: pkg.crossplane.io/v1beta1
+kind: DeploymentRuntimeConfig
+metadata:
+  name: runtimeconfig-provider-opencve
+spec:
+  deploymentTemplate:
+    spec:
+      selector: {}
+      template:
+        spec:
+          containers:
+            - name: package-runtime
+              args: [--debug, --poll=10s]

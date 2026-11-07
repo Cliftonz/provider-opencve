@@ -1,0 +1,11 @@
+# SPDX-FileCopyrightText: 2026 The provider-opencve authors
+#
+# SPDX-License-Identifier: Apache-2.0
+
+kind: Cluster
+apiVersion: kind.x-k8s.io/v1alpha4
+nodes:
+  - role: control-plane
+    extraPortMappings:
+      - containerPort: 30900
+        hostPort: 30900

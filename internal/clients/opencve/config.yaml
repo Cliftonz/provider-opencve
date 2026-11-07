@@ -1,0 +1,39 @@
+# SPDX-FileCopyrightText: 2026 The provider-opencve authors
+#
+# SPDX-License-Identifier: Apache-2.0
+
+package: opencve
+output: client.gen.go
+generate:
+  models: true
+  client: true
+output-options:
+  nullable-type: true
+  user-templates:
+    imports.tmpl: templates/imports.tmpl
+  include-operation-ids:
+    - organizations_retrieve
+    - organizations_members_list
+    - organizations_members_create
+    - organizations_members_partial_update
+    - organizations_members_destroy
+    - organizations_projects_create
+    - organizations_projects_retrieve
+    - organizations_projects_partial_update
+    - organizations_projects_destroy
+    - organizations_projects_automations_create
+    - organizations_projects_automations_retrieve
+    - organizations_projects_automations_partial_update
+    - organizations_projects_automations_destroy
+    - organizations_projects_notifications_create
+    - organizations_projects_notifications_retrieve
+    - organizations_projects_notifications_partial_update
+    - organizations_projects_notifications_destroy
+    - organizations_projects_subscriptions_list
+    - organizations_projects_subscriptions_update
+    - organizations_projects_members_list
+    - organizations_projects_members_create
+    - organizations_projects_members_partial_update
+    - organizations_projects_members_destroy
+    - organizations_projects_cves_retrieve
+    - organizations_projects_cves_partial_update

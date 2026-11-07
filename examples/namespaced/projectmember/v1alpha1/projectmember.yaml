@@ -1,0 +1,54 @@
+# SPDX-FileCopyrightText: 2026 The provider-opencve authors
+#
+# SPDX-License-Identifier: Apache-2.0
+
+apiVersion: project.opencve.m.clifton.quest/v1alpha1
+kind: Project
+metadata:
+  name: example-projectmember-project
+  namespace: default
+  annotations:
+    meta.upbound.io/example-id: projectmember/v1alpha1/projectmember
+    uptest.upbound.io/pre-delete-hook: 'testhooks/projectmember-api.sh updated || exit 1'
+spec:
+  providerConfigRef:
+    kind: ProviderConfig
+    name: default
+  forProvider:
+    name: example-projectmember-project
+---
+apiVersion: organizationmember.opencve.m.clifton.quest/v1alpha1
+kind: OrganizationMember
+metadata:
+  name: example-projectmember-member
+  namespace: default
+  annotations:
+    meta.upbound.io/example-id: projectmember/v1alpha1/projectmember
+spec:
+  providerConfigRef:
+    kind: ProviderConfig
+    name: default
+  forProvider:
+    email: example-projectmember@example.com
+    role: member
+---
+apiVersion: projectmember.opencve.m.clifton.quest/v1alpha1
+kind: ProjectMember
+metadata:
+  name: example-projectmember
+  namespace: default
+  annotations:
+    meta.upbound.io/example-id: projectmember/v1alpha1/projectmember
+    uptest.upbound.io/post-assert-hook: 'testhooks/projectmember-api.sh'
+    uptest.upbound.io/post-delete-hook: 'testhooks/projectmember-api.sh deleted || exit 1'
+    uptest.upbound.io/update-parameter: '{"role":"contributor"}'
+spec:
+  providerConfigRef:
+    kind: ProviderConfig
+    name: default
+  forProvider:
+    projectNameRef:
+      name: example-projectmember-project
+    membershipIdRef:
+      name: example-projectmember-member
+    role: viewer
