@@ -8,7 +8,7 @@ SPDX-License-Identifier: Apache-2.0
 
 A kind cluster named `opencve-e2e` that end to end tests run against. By default it runs a self-hosted OpenCVE webserver and Postgres, bootstrapped headlessly so the tests get a real organization token. Crossplane and the provider are installed into the same cluster by `e2e.sh`.
 
-The webserver image is built from the OpenCVE source at `OPENCVE_VERSION` with the Python base image pinned by digest; every other image is pinned by digest in `images.env`.
+The webserver image is built from the OpenCVE source at `OPENCVE_VERSION`, a master commit because the project members endpoint is not in any release yet; it moves back to a release tag once one ships with it. The image is built with the Python base image pinned by digest; every other image is pinned by digest in `images.env`.
 
 ## Run
 
@@ -29,24 +29,24 @@ test/harness/down.sh   # delete the cluster
 | `organization` | `opencve-e2e` |
 | `url` | `http://opencve-e2e-control-plane:30900`, reachable from pods in kind; the provider appends `/api/v2` |
 
-It also writes `test/harness/.out/opencve.env` with `OPENCVE_URL` (`http://localhost:30900`, the host side of the same API), `OPENCVE_TOKEN` and `OPENCVE_ORGANIZATION`; `e2e.sh` exports them for the API test hooks.
+It also writes `test/harness/.out/opencve.env` with `OPENCVE_URL` (`http://localhost:30900`, the host side of the same API), `OPENCVE_TOKEN`, `OPENCVE_ORGANIZATION` and `OPENCVE_MEMBERSHIP_ID`; `e2e.sh` exports them for the API test hooks and substitutes `${OPENCVE_MEMBERSHIP_ID}` in the examples.
 
-`bootstrap.py` seeds the vendors apache, linux and microsoft, the product microsoft windows and the CVE CVE-2021-44228 (vendor apache), which the subscription and CveTracker examples need.
+`bootstrap.py` seeds the vendors apache, linux and microsoft, the product microsoft windows and the CVE CVE-2021-44228 (vendor apache), which the subscription and CveTracker examples need. It also seeds the user `e2e-member` with a joined `member` membership in `opencve-e2e`, whose id is `OPENCVE_MEMBERSHIP_ID`, for the ProjectMember example.
 
 ## SaaS mode
 
 ```sh
-E2E_TARGET=saas OPENCVE_TOKEN=opc_org.... OPENCVE_ORGANIZATION=my-org test/harness/up.sh
+E2E_TARGET=saas OPENCVE_TOKEN=opc_org.... OPENCVE_ORGANIZATION=my-org OPENCVE_MEMBERSHIP_ID=123 test/harness/up.sh
 E2E_TARGET=saas test/harness/e2e.sh
 ```
 
-`OPENCVE_URL` defaults to `https://app.opencve.io`. `up.sh` then only creates the kind cluster and writes the given credentials; no OpenCVE is deployed.
+`OPENCVE_MEMBERSHIP_ID` is required: the id of a joined member of the organization who is not the token's author, since a pending invite cannot join a project and the token's author cannot change its own project role. `OPENCVE_URL` defaults to `https://app.opencve.io`. `up.sh` then only creates the kind cluster and writes the given credentials; no OpenCVE is deployed.
 
 ## Examples per target
 
 | Example | kind | saas |
 |---|---|---|
-| projectmember | skipped, the project members endpoint is not in OpenCVE v3.1.0 | run |
+| projectmember | run, against the seeded `e2e-member` | run, against `OPENCVE_MEMBERSHIP_ID` |
 | every other kind | run | run |
 
 ## API test hooks

@@ -25,57 +25,75 @@ example() {
   stub docker 'exit 1'
   stub kubectl 'exit 1'
   PATH="$PWD/bin:$PATH" E2E_TARGET=saas OPENCVE_TOKEN=opc_org.abc.def OPENCVE_ORGANIZATION=acme OPENCVE_URL=https://app.opencve.io \
-    run harness/up.sh
+    OPENCVE_MEMBERSHIP_ID=42 run harness/up.sh
   [ "$status" -eq 0 ]
   [ "$(jq -c . harness/.out/credentials.json)" = '{"token":"opc_org.abc.def","organization":"acme","url":"https://app.opencve.io"}' ]
-  [ "$(cat harness/.out/opencve.env)" = "$(printf 'OPENCVE_URL=https://app.opencve.io\nOPENCVE_TOKEN=opc_org.abc.def\nOPENCVE_ORGANIZATION=acme')" ]
+  [ "$(cat harness/.out/opencve.env)" = "$(printf 'OPENCVE_URL=https://app.opencve.io\nOPENCVE_TOKEN=opc_org.abc.def\nOPENCVE_ORGANIZATION=acme\nOPENCVE_MEMBERSHIP_ID=42')" ]
 }
 
 @test "saas mode defaults the url to app.opencve.io" {
   cp -r "$ROOT/test/harness" harness
   stub kind 'exit 0'
-  PATH="$PWD/bin:$PATH" E2E_TARGET=saas OPENCVE_TOKEN=t OPENCVE_ORGANIZATION=o run env -u OPENCVE_URL harness/up.sh
+  PATH="$PWD/bin:$PATH" E2E_TARGET=saas OPENCVE_TOKEN=t OPENCVE_ORGANIZATION=o OPENCVE_MEMBERSHIP_ID=1 run env -u OPENCVE_URL harness/up.sh
   [ "$status" -eq 0 ]
   [ "$(jq -r .url harness/.out/credentials.json)" = https://app.opencve.io ]
 }
 
-@test "kind target lists every example except project members and manual intervention" {
+kind_up() {
+  cp -r "$ROOT/test/harness" harness
+  printf 'FROM base AS builder\n%s\nRUN python3 -m venv /app/venv\n' "$1" > upstream.Dockerfile
+  stub kind 'exit 0'
+  stub curl "echo \"\$*\" >> $PWD/curl.log; cat $PWD/upstream.Dockerfile"
+  stub docker "if [ \"\$1\" = build ]; then echo \"\$*\" >> $PWD/docker.log; cat > $PWD/built.Dockerfile; fi"
+  stub kubectl 'if [ "${*: -3}" = "apply -f -" ]; then cat > /dev/null; fi
+if [ "${*: -1}" = shell ]; then printf "OPENCVE_TOKEN=t\nOPENCVE_ORGANIZATION=o\nOPENCVE_MEMBERSHIP_ID=7\n"; fi'
+  PATH="$PWD/bin:$PATH" run harness/up.sh
+}
+
+@test "kind mode writes the membership id the bootstrap seeded" {
+  kind_up 'RUN git clone --depth 1 -b "${OPENCVE_VERSION}" --single-branch "${OPENCVE_REPOSITORY}"'
+  [ "$status" -eq 0 ]
+  [ "$(cat harness/.out/opencve.env)" = "$(printf 'OPENCVE_URL=http://localhost:30900\nOPENCVE_TOKEN=t\nOPENCVE_ORGANIZATION=o\nOPENCVE_MEMBERSHIP_ID=7')" ]
+}
+
+@test "kind mode builds the upstream Dockerfile at the pinned commit with the clone checking out that commit" {
+  kind_up 'RUN git clone --depth 1 -b "${OPENCVE_VERSION}" --single-branch "${OPENCVE_REPOSITORY}"'
+  [ "$status" -eq 0 ]
+  version=$(sed -n 's/^OPENCVE_VERSION=//p' harness/images.env)
+  grep -qx "https://raw.githubusercontent.com/opencve/opencve/$version/web/Dockerfile" <(grep -o 'https://[^ ]*' curl.log)
+  [ "$(cat built.Dockerfile)" = "$(printf '%s\n' 'FROM base AS builder' 'RUN git clone "${OPENCVE_REPOSITORY}" && git -C opencve checkout "${OPENCVE_VERSION}"' 'RUN python3 -m venv /app/venv')" ]
+  grep -q -- "-f - https://github.com/opencve/opencve.git#$version:web" docker.log
+}
+
+@test "kind mode fails before building when the upstream Dockerfile has no clone line to patch" {
+  kind_up 'RUN git clone https://example.com/other.git'
+  [ "$status" -ne 0 ]
+  [ ! -e docker.log ]
+}
+
+@test "lists every example except manual intervention" {
   example project project
   example projectmember projectmember
   example cvetracker cvetracker '    upjet.upbound.io/manual-intervention: needs a CVE'
-  E2E_TARGET=kind run "$ROOT/test/harness/examples.sh"
-  [ "$status" -eq 0 ]
-  [ "$output" = "examples/namespaced/project/v1alpha1/project.yaml" ]
-}
-
-@test "saas target includes project members" {
-  example project project
-  example projectmember projectmember
-  E2E_TARGET=saas run "$ROOT/test/harness/examples.sh"
-  [ "$status" -eq 0 ]
-  [ "$output" = "$(printf 'examples/namespaced/project/v1alpha1/project.yaml\nexamples/namespaced/projectmember/v1alpha1/projectmember.yaml')" ]
-}
-
-@test "target defaults to kind" {
-  example projectmember projectmember
   run "$ROOT/test/harness/examples.sh"
   [ "$status" -eq 0 ]
-  [ "$output" = "" ]
+  [ "$output" = "$(printf 'examples/namespaced/project/v1alpha1/project.yaml\nexamples/namespaced/projectmember/v1alpha1/projectmember.yaml')" ]
 }
 
 @test "package mode installs the given package instead of building and runs uptest on every example" {
   mkdir -p test/harness/.out
   cp "$ROOT/test/harness/e2e.sh" "$ROOT/test/harness/examples.sh" "$ROOT/test/harness/runtimeconfig.yaml" test/harness/
   echo '{"token":"t","organization":"o","url":"u"}' > test/harness/.out/credentials.json
-  printf 'OPENCVE_URL=u\nOPENCVE_TOKEN=t\nOPENCVE_ORGANIZATION=o\n' > test/harness/.out/opencve.env
+  printf 'OPENCVE_URL=u\nOPENCVE_TOKEN=t\nOPENCVE_ORGANIZATION=o\nOPENCVE_MEMBERSHIP_ID=42\n' > test/harness/.out/opencve.env
   example project project
-  example automation automation
+  example automation automation '    a: $b ${OPENCVE_MEMBERSHIP_ID}'
   stub kind 'exit 0'
-  stub make 'echo "$*" >> make.log'
+  stub make 'echo "$*" >> make.log; if [ "$1" = uptest ]; then cat "${2#*=}" >> uptest.yaml; fi'
   stub kubectl 'echo "$*" >> kubectl.log; if [ "$1" = apply ]; then cat >> applied.yaml; fi'
   PATH="$PWD/bin:$PATH" E2E_PACKAGE=xpkg.upbound.io/cliftonz/provider-opencve:v9.9.9 run test/harness/e2e.sh
   [ "$status" -eq 0 ]
-  [ "$(grep -v '^controlplane.up' make.log)" = "$(printf 'uptest UPTEST_INPUT_MANIFESTS=examples/namespaced/automation/v1alpha1/automation.yaml\nuptest UPTEST_INPUT_MANIFESTS=examples/namespaced/project/v1alpha1/project.yaml')" ]
+  [ "$(grep -v '^controlplane.up' make.log)" = "$(printf 'uptest UPTEST_INPUT_MANIFESTS=_output/examples/namespaced/automation/v1alpha1/automation.yaml\nuptest UPTEST_INPUT_MANIFESTS=_output/examples/namespaced/project/v1alpha1/project.yaml')" ]
+  grep -qx '    a: $b 42' uptest.yaml
   grep -q 'package: xpkg.upbound.io/cliftonz/provider-opencve:v9.9.9' applied.yaml
   grep -q 'kind: DeploymentRuntimeConfig' applied.yaml
   grep -q 'wait provider.pkg provider-opencve --for condition=Healthy' kubectl.log

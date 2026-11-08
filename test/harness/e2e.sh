@@ -41,6 +41,9 @@ else
 fi
 kubectl -n crossplane-system wait --for=condition=Available deployment --all --timeout=5m
 
+rm -rf _output/examples
+cp -r examples _output/
 for example in $(test/harness/examples.sh); do
-  make uptest UPTEST_INPUT_MANIFESTS="$example"
+  envsubst '$OPENCVE_MEMBERSHIP_ID' < "$example" > "_output/$example"
+  make uptest UPTEST_INPUT_MANIFESTS="_output/$example"
 done

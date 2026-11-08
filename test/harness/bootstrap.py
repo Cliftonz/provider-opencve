@@ -13,6 +13,10 @@ org, _ = Organization.objects.get_or_create(name="opencve-e2e")
 Membership.objects.get_or_create(
     user=admin, organization=org, defaults={"role": Membership.OWNER, "date_joined": timezone.now()}
 )
+member, _ = User.objects.get_or_create(username="e2e-member", defaults={"email": "e2e-member@example.com"})
+membership, _ = Membership.objects.get_or_create(
+    user=member, organization=org, defaults={"role": Membership.MEMBER, "date_joined": timezone.now()}
+)
 OrganizationAPIToken.objects.filter(organization=org, name="opencve-e2e").delete()
 token = OrganizationAPIToken.create_token(org, "opencve-e2e", None, admin, OrganizationAPIToken.AccessMode.WRITE)
 
@@ -25,3 +29,4 @@ Cve.objects.get_or_create(
 
 print(f"OPENCVE_TOKEN={token}")
 print(f"OPENCVE_ORGANIZATION={org.name}")
+print(f"OPENCVE_MEMBERSHIP_ID={membership.id}")
