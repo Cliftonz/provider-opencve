@@ -17,21 +17,6 @@ spec:
   forProvider:
     name: example-projectmember-project
 ---
-apiVersion: organizationmember.opencve.m.clifton.quest/v1alpha1
-kind: OrganizationMember
-metadata:
-  name: example-projectmember-member
-  namespace: default
-  annotations:
-    meta.upbound.io/example-id: projectmember/v1alpha1/projectmember
-spec:
-  providerConfigRef:
-    kind: ProviderConfig
-    name: default
-  forProvider:
-    email: example-projectmember@example.com
-    role: member
----
 apiVersion: projectmember.opencve.m.clifton.quest/v1alpha1
 kind: ProjectMember
 metadata:
@@ -49,6 +34,5 @@ spec:
   forProvider:
     projectNameRef:
       name: example-projectmember-project
-    membershipIdRef:
-      name: example-projectmember-member
+    membershipId: "${OPENCVE_MEMBERSHIP_ID}"
     role: viewer
