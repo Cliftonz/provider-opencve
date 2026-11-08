@@ -1,0 +1,18 @@
+# SPDX-FileCopyrightText: 2026 The provider-opencve authors
+#
+# SPDX-License-Identifier: Apache-2.0
+
+apiVersion: organization.opencve.m.clifton.quest/v1alpha1
+kind: Organization
+metadata:
+  name: example-organization
+  namespace: default
+  annotations:
+    meta.upbound.io/example-id: organization/v1alpha1/organization
+    uptest.upbound.io/post-assert-hook: 'testhooks/organization-api.sh'
+    uptest.upbound.io/post-delete-hook: 'testhooks/organization-api.sh deleted || exit 1'
+spec:
+  providerConfigRef:
+    kind: ProviderConfig
+    name: default
+  forProvider: {}

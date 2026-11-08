@@ -1,0 +1,53 @@
+# SPDX-FileCopyrightText: 2026 The provider-opencve authors
+#
+# SPDX-License-Identifier: Apache-2.0
+
+apiVersion: v1
+kind: Secret
+metadata:
+  name: example-notification-configuration
+  namespace: default
+  annotations:
+    meta.upbound.io/example-id: notification/v1alpha1/notification
+type: Opaque
+stringData:
+  configuration: '{"url": "https://example.com/opencve-webhook", "headers": {"X-Source": "provider-opencve"}}'
+---
+apiVersion: project.opencve.m.clifton.quest/v1alpha1
+kind: Project
+metadata:
+  name: example-notification-project
+  namespace: default
+  annotations:
+    meta.upbound.io/example-id: notification/v1alpha1/notification
+    uptest.upbound.io/pre-delete-hook: 'testhooks/notification-api.sh updated || exit 1'
+spec:
+  providerConfigRef:
+    kind: ProviderConfig
+    name: default
+  forProvider:
+    name: example-notification-project
+---
+apiVersion: notification.opencve.m.clifton.quest/v1alpha1
+kind: Notification
+metadata:
+  name: example-notification
+  namespace: default
+  annotations:
+    meta.upbound.io/example-id: notification/v1alpha1/notification
+    uptest.upbound.io/post-assert-hook: 'testhooks/notification-api.sh'
+    uptest.upbound.io/post-delete-hook: 'testhooks/notification-api.sh deleted || exit 1'
+    uptest.upbound.io/update-parameter: '{"isEnabled":false}'
+spec:
+  providerConfigRef:
+    kind: ProviderConfig
+    name: default
+  forProvider:
+    projectNameRef:
+      name: example-notification-project
+    name: example-notification
+    type: webhook
+    isEnabled: true
+    configurationSecretRef:
+      name: example-notification-configuration
+      key: configuration

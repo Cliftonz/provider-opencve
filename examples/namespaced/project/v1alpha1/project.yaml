@@ -1,0 +1,22 @@
+# SPDX-FileCopyrightText: 2026 The provider-opencve authors
+#
+# SPDX-License-Identifier: Apache-2.0
+
+apiVersion: project.opencve.m.clifton.quest/v1alpha1
+kind: Project
+metadata:
+  name: example-project
+  namespace: default
+  annotations:
+    meta.upbound.io/example-id: project/v1alpha1/project
+    uptest.upbound.io/post-assert-hook: 'testhooks/project-api.sh'
+    uptest.upbound.io/pre-delete-hook: 'testhooks/project-api.sh updated || exit 1'
+    uptest.upbound.io/post-delete-hook: 'testhooks/project-api.sh deleted || exit 1'
+    uptest.upbound.io/update-parameter: '{"description":"updated by uptest"}'
+spec:
+  providerConfigRef:
+    kind: ProviderConfig
+    name: default
+  forProvider:
+    name: example-project
+    description: managed by provider-opencve
