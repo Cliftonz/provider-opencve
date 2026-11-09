@@ -19,7 +19,7 @@ kind export kubeconfig --name "$CLUSTER" --kubeconfig "$KUBECONFIG"
 make controlplane.up KIND_CLUSTER_NAME="$CLUSTER"
 if [ -n "${E2E_PACKAGE:-}" ]; then
   crds=(crd/providers.pkg.crossplane.io crd/deploymentruntimeconfigs.pkg.crossplane.io)
-  kubectl wait --for=create --timeout=5m "${crds[@]}"
+  kubectl -n crossplane-system wait --for=condition=Available deployment --all --timeout=5m
   kubectl wait --for condition=Established --timeout=5m "${crds[@]}"
   {
     cat test/harness/runtimeconfig.yaml

@@ -97,7 +97,7 @@ if [ "${*: -1}" = shell ]; then printf "OPENCVE_TOKEN=t\nOPENCVE_ORGANIZATION=o\
   grep -q 'package: xpkg.upbound.io/cliftonz/provider-opencve:v9.9.9' applied.yaml
   grep -q 'kind: DeploymentRuntimeConfig' applied.yaml
   crds='crd/providers.pkg.crossplane.io crd/deploymentruntimeconfigs.pkg.crossplane.io'
-  [ "$(head -3 kubectl.log)" = "$(printf 'wait --for=create --timeout=5m %s\nwait --for condition=Established --timeout=5m %s\napply -f -' "$crds" "$crds")" ]
+  [ "$(head -3 kubectl.log)" = "$(printf -- '-n crossplane-system wait --for=condition=Available deployment --all --timeout=5m\nwait --for condition=Established --timeout=5m %s\napply -f -' "$crds")" ]
   grep -q 'wait provider.pkg provider-opencve --for condition=Healthy' kubectl.log
 }
 
