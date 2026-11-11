@@ -42,12 +42,18 @@ func (e *external) Observe(ctx context.Context, cr *v1alpha1.Organization) (mana
 	}
 	o := resp.JSON200
 	cr.Status.AtProvider = v1alpha1.OrganizationObservation{
-		ID:            o.Id.String(),
 		Name:          o.Name,
 		MembersCount:  o.MembersCount,
 		ProjectsCount: o.ProjectsCount,
-		CreatedAt:     &metav1.Time{Time: *o.CreatedAt},
-		UpdatedAt:     &metav1.Time{Time: *o.UpdatedAt},
+	}
+	if o.Id != nil {
+		cr.Status.AtProvider.ID = o.Id.String()
+	}
+	if o.CreatedAt != nil {
+		cr.Status.AtProvider.CreatedAt = &metav1.Time{Time: *o.CreatedAt}
+	}
+	if o.UpdatedAt != nil {
+		cr.Status.AtProvider.UpdatedAt = &metav1.Time{Time: *o.UpdatedAt}
 	}
 	cr.SetConditions(xpv2.Available())
 	return managed.ExternalObservation{ResourceExists: true, ResourceUpToDate: true}, nil
