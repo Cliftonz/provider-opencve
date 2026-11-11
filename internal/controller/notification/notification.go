@@ -49,6 +49,9 @@ func (e *external) Observe(ctx context.Context, cr *v1alpha1.Notification) (mana
 	if err := kit.CheckStatus(fmt.Sprintf("get notification %q", name), resp); err != nil {
 		return managed.ExternalObservation{}, err
 	}
+	if meta.WasDeleted(cr) {
+		return managed.ExternalObservation{ResourceExists: true}, nil
+	}
 	_, hash, err := e.configuration(ctx, cr)
 	if err != nil {
 		return managed.ExternalObservation{}, err

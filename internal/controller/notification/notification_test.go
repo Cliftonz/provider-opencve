@@ -13,6 +13,7 @@ import (
 	"reflect"
 	"strings"
 	"testing"
+	"time"
 
 	corev1 "k8s.io/api/core/v1"
 	kerrors "k8s.io/apimachinery/pkg/api/errors"
@@ -149,6 +150,18 @@ func TestObserveNotFoundDoesNotExist(t *testing.T) {
 		t.Errorf("observation = %+v, want resource not to exist", got)
 	}
 	assertReceived(t, api, request{Method: http.MethodGet, Path: notificationPath})
+}
+
+func TestObserveDeletedNotificationExistsWithoutItsSecret(t *testing.T) {
+	cr := notification(notificationName, webhookSpec())
+	cr.SetDeletionTimestamp(&metav1.Time{Time: time.Now()})
+	got, err := connect(t, &fakeAPI{status: http.StatusOK, response: remoteWebhook}).Observe(t.Context(), cr)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !got.ResourceExists {
+		t.Errorf("observation = %+v, want the notification to exist so it can be deleted", got)
+	}
 }
 
 func TestObserveServerErrorIsAnError(t *testing.T) {
