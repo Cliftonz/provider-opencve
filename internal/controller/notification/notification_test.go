@@ -175,7 +175,8 @@ func TestObserveServerErrorIsAnError(t *testing.T) {
 func TestObserveExistingNotificationReportsAtProviderAndAvailable(t *testing.T) {
 	api := &fakeAPI{status: http.StatusOK, response: remoteWebhook}
 	cr := notification(notificationName, webhookSpec())
-	cr.Status.AtProvider.ConfigurationHash = appliedHash(t, webhookConfiguration)
+	hash := appliedHash(t, webhookConfiguration)
+	cr.Status.AtProvider.ConfigurationHash = hash
 	got, err := connect(t, api, webhookSecret()).Observe(t.Context(), cr)
 	if err != nil {
 		t.Fatal(err)
@@ -189,7 +190,7 @@ func TestObserveExistingNotificationReportsAtProviderAndAvailable(t *testing.T) 
 		Type:                       webhookType,
 		IsEnabled:                  ptr(true),
 		IsPendingEmailConfirmation: ptr(false),
-		ConfigurationHash:          appliedHash(t, webhookConfiguration),
+		ConfigurationHash:          hash,
 	}
 	if !reflect.DeepEqual(cr.Status.AtProvider, wantAt) {
 		t.Errorf("atProvider\n got: %+v\nwant: %+v", cr.Status.AtProvider, wantAt)
@@ -454,7 +455,7 @@ func TestUpdateSetsAtProviderFromResponse(t *testing.T) {
 	fp := webhookSpec()
 	fp.IsEnabled = ptr(false)
 	cr := notification(notificationName, fp)
-	cr.Status.AtProvider = v1alpha1.NotificationObservation{ID: "3fa85f64-5717-4562-b3fc-2c963f66afa6", Name: notificationName, Type: webhookType, IsEnabled: ptr(true), IsPendingEmailConfirmation: ptr(false), ConfigurationHash: appliedHash(t, webhookConfiguration)}
+	cr.Status.AtProvider = v1alpha1.NotificationObservation{ID: "3fa85f64-5717-4562-b3fc-2c963f66afa6", Name: notificationName, Type: webhookType, IsEnabled: ptr(true), IsPendingEmailConfirmation: ptr(false)}
 	if _, err := connect(t, api, webhookSecret()).Update(t.Context(), cr); err != nil {
 		t.Fatal(err)
 	}

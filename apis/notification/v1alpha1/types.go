@@ -41,8 +41,9 @@ type NotificationParameters struct {
 	// ConfigurationSecretRef selects a key, in a Secret in the notification's
 	// namespace, holding the notification configuration as JSON. The
 	// configuration is applied when the notification is created and whenever
-	// the Secret's content changes. Keys removed from the Secret are not removed
-	// from OpenCVE. The reference cannot be changed.
+	// the configuration in the Secret changes. Keys removed from the
+	// configuration JSON are not removed from OpenCVE. The reference cannot be
+	// changed.
 	// +kubebuilder:validation:XValidation:rule="self == oldSelf",message="configurationSecretRef is immutable"
 	// +optional
 	ConfigurationSecretRef *xpv2.LocalSecretKeySelector `json:"configurationSecretRef,omitempty"`
