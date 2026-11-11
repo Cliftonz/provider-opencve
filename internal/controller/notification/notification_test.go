@@ -359,6 +359,49 @@ func TestCreateWithNonObjectConfigurationIsANamedError(t *testing.T) {
 	}
 }
 
+func secretErrorCases() map[string]struct {
+	secrets []*corev1.Secret
+	is      func(error) bool
+} {
+	keyMissing := webhookSecret()
+	keyMissing.Data = map[string][]byte{"other": []byte(`{}`)}
+	return map[string]struct {
+		secrets []*corev1.Secret
+		is      func(error) bool
+	}{
+		"SecretMissing": {is: kerrors.IsNotFound},
+		"KeyMissing":    {secrets: []*corev1.Secret{keyMissing}, is: func(err error) bool { return errors.Is(err, errMissingConfigurationKey) }},
+		"InvalidJSON": {secrets: []*corev1.Secret{webhookSecretWith(`{"extras":`)}, is: func(err error) bool {
+			var syntax *json.SyntaxError
+			return errors.As(err, &syntax)
+		}},
+	}
+}
+
+func TestObserveSecretErrorsAreErrors(t *testing.T) {
+	for name, tc := range secretErrorCases() {
+		t.Run(name, func(t *testing.T) {
+			_, err := connect(t, &fakeAPI{status: http.StatusOK, response: remoteWebhook}, tc.secrets...).Observe(t.Context(), notification(notificationName, webhookSpec()))
+			if !tc.is(err) {
+				t.Errorf("error = %v, want the %s error", err, name)
+			}
+		})
+	}
+}
+
+func TestUpdateSecretErrorsAreErrorsAndSendNothing(t *testing.T) {
+	for name, tc := range secretErrorCases() {
+		t.Run(name, func(t *testing.T) {
+			api := &fakeAPI{status: http.StatusOK, response: remoteWebhook}
+			_, err := connect(t, api, tc.secrets...).Update(t.Context(), notification(notificationName, webhookSpec()))
+			if !tc.is(err) {
+				t.Errorf("error = %v, want the %s error", err, name)
+			}
+			assertReceived(t, api)
+		})
+	}
+}
+
 func TestUpdatePatchesIsEnabledOnlyWhenTheConfigurationIsApplied(t *testing.T) {
 	api := &fakeAPI{status: http.StatusOK, response: remoteWebhook}
 	fp := webhookSpec()
