@@ -105,13 +105,26 @@ func webhookSpec() v1alpha1.NotificationParameters {
 	}
 }
 
+const webhookConfiguration = `{"extras":{"url":"https://hooks.example.com/opencve","headers":{"X-Token":"s3cr3t"}},"types":["created"],"metrics":{"cvss31":"7"}}`
+
 func webhookSecret() *corev1.Secret {
+	return webhookSecretWith(webhookConfiguration)
+}
+
+func webhookSecretWith(configuration string) *corev1.Secret {
 	return &corev1.Secret{
 		ObjectMeta: metav1.ObjectMeta{Name: "ops-webhook", Namespace: "team-a"},
-		Data: map[string][]byte{
-			"configuration": []byte(`{"extras":{"url":"https://hooks.example.com/opencve","headers":{"X-Token":"s3cr3t"}},"types":["created"],"metrics":{"cvss31":"7"}}`),
-		},
+		Data:       map[string][]byte{"configuration": []byte(configuration)},
 	}
+}
+
+func appliedHash(t *testing.T, configuration string) string {
+	t.Helper()
+	cr := notification("", webhookSpec())
+	if _, err := connect(t, &fakeAPI{status: http.StatusCreated, response: remoteWebhook}, webhookSecretWith(configuration)).Create(t.Context(), cr); err != nil {
+		t.Fatal(err)
+	}
+	return cr.Status.AtProvider.ConfigurationHash
 }
 
 func TestObserveWithoutExternalNameDoesNotExist(t *testing.T) {
@@ -149,6 +162,7 @@ func TestObserveServerErrorIsAnError(t *testing.T) {
 func TestObserveExistingNotificationReportsAtProviderAndAvailable(t *testing.T) {
 	api := &fakeAPI{status: http.StatusOK, response: remoteWebhook}
 	cr := notification(notificationName, webhookSpec())
+	cr.Status.AtProvider.ConfigurationHash = appliedHash(t, webhookConfiguration)
 	got, err := connect(t, api, webhookSecret()).Observe(t.Context(), cr)
 	if err != nil {
 		t.Fatal(err)
@@ -162,6 +176,7 @@ func TestObserveExistingNotificationReportsAtProviderAndAvailable(t *testing.T) 
 		Type:                       webhookType,
 		IsEnabled:                  ptr(true),
 		IsPendingEmailConfirmation: ptr(false),
+		ConfigurationHash:          appliedHash(t, webhookConfiguration),
 	}
 	if !reflect.DeepEqual(cr.Status.AtProvider, wantAt) {
 		t.Errorf("atProvider\n got: %+v\nwant: %+v", cr.Status.AtProvider, wantAt)
@@ -213,12 +228,16 @@ func TestObserveLateInitializesIsEnabled(t *testing.T) {
 
 func TestObserveUpToDate(t *testing.T) {
 	cases := map[string]struct {
-		spec func(*v1alpha1.NotificationParameters)
-		want bool
+		spec    func(*v1alpha1.NotificationParameters)
+		applied string
+		want    bool
 	}{
-		"Matches":           {want: true},
-		"TypeIsNotCompared": {spec: func(fp *v1alpha1.NotificationParameters) { fp.Type = "slack" }, want: true},
-		"IsEnabledDiffers":  {spec: func(fp *v1alpha1.NotificationParameters) { fp.IsEnabled = ptr(false) }},
+		"Matches":                   {applied: webhookConfiguration, want: true},
+		"TypeIsNotCompared":         {spec: func(fp *v1alpha1.NotificationParameters) { fp.Type = "slack" }, applied: webhookConfiguration, want: true},
+		"IsEnabledDiffers":          {spec: func(fp *v1alpha1.NotificationParameters) { fp.IsEnabled = ptr(false) }, applied: webhookConfiguration},
+		"ConfigurationReformatted":  {applied: "{ \"metrics\": {\"cvss31\": \"7\"},\n  \"types\": [\"created\"],\n  \"extras\": {\"headers\": {\"X-Token\": \"s3cr3t\"}, \"url\": \"https://hooks.example.com/opencve\"} }", want: true},
+		"ConfigurationChanged":      {applied: `{"extras":{"url":"https://old.example.com/opencve"}}`},
+		"ConfigurationNeverApplied": {},
 	}
 	for name, tc := range cases {
 		t.Run(name, func(t *testing.T) {
@@ -226,7 +245,11 @@ func TestObserveUpToDate(t *testing.T) {
 			if tc.spec != nil {
 				tc.spec(&fp)
 			}
-			got, err := connect(t, &fakeAPI{status: http.StatusOK, response: remoteWebhook}).Observe(t.Context(), notification(notificationName, fp))
+			cr := notification(notificationName, fp)
+			if tc.applied != "" {
+				cr.Status.AtProvider.ConfigurationHash = appliedHash(t, tc.applied)
+			}
+			got, err := connect(t, &fakeAPI{status: http.StatusOK, response: remoteWebhook}, webhookSecret()).Observe(t.Context(), cr)
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -304,9 +327,7 @@ func TestCreateWithMissingSecretKeyIsANamedError(t *testing.T) {
 
 func TestCreateWithInvalidConfigurationJSONWrapsTheDecodeError(t *testing.T) {
 	api := &fakeAPI{status: http.StatusCreated, response: remoteWebhook}
-	s := webhookSecret()
-	s.Data = map[string][]byte{"configuration": []byte(`{"extras":`)}
-	_, err := connect(t, api, s).Create(t.Context(), notification("", webhookSpec()))
+	_, err := connect(t, api, webhookSecretWith(`{"extras":`)).Create(t.Context(), notification("", webhookSpec()))
 	var syntax *json.SyntaxError
 	if !errors.As(err, &syntax) || !strings.Contains(err.Error(), `"configuration"`) || !strings.Contains(err.Error(), `"ops-webhook"`) {
 		t.Errorf("error = %v, want a wrapped JSON syntax error naming key configuration and Secret ops-webhook", err)
@@ -314,11 +335,30 @@ func TestCreateWithInvalidConfigurationJSONWrapsTheDecodeError(t *testing.T) {
 	assertReceived(t, api)
 }
 
-func TestUpdatePatchesIsEnabledOnly(t *testing.T) {
+func TestCreateRecordsTheAppliedConfiguration(t *testing.T) {
+	cr := notification("", webhookSpec())
+	if _, err := connect(t, &fakeAPI{status: http.StatusCreated, response: remoteWebhook}, webhookSecret()).Create(t.Context(), cr); err != nil {
+		t.Fatal(err)
+	}
+	for configuration, want := range map[string]bool{webhookConfiguration: true, `{"extras":{"url":"https://new.example.com/opencve"}}`: false} {
+		observed := cr.DeepCopy()
+		got, err := connect(t, &fakeAPI{status: http.StatusOK, response: remoteWebhook}, webhookSecretWith(configuration)).Observe(t.Context(), observed)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if got.ResourceUpToDate != want {
+			t.Errorf("Secret %s: up to date = %t, want %t", configuration, got.ResourceUpToDate, want)
+		}
+	}
+}
+
+func TestUpdatePatchesIsEnabledOnlyWhenTheConfigurationIsApplied(t *testing.T) {
 	api := &fakeAPI{status: http.StatusOK, response: remoteWebhook}
 	fp := webhookSpec()
 	fp.IsEnabled = ptr(false)
-	if _, err := connect(t, api, webhookSecret()).Update(t.Context(), notification(notificationName, fp)); err != nil {
+	cr := notification(notificationName, fp)
+	cr.Status.AtProvider.ConfigurationHash = appliedHash(t, webhookConfiguration)
+	if _, err := connect(t, api, webhookSecret()).Update(t.Context(), cr); err != nil {
 		t.Fatal(err)
 	}
 	assertReceived(t, api, request{Method: http.MethodPatch, Path: notificationPath, Body: map[string]any{
@@ -326,16 +366,49 @@ func TestUpdatePatchesIsEnabledOnly(t *testing.T) {
 	}})
 }
 
+func TestUpdatePatchesTheSecretConfigurationWhenItIsNotApplied(t *testing.T) {
+	for name, applied := range map[string]string{
+		"SecretChanged": `{"extras":{"url":"https://old.example.com/opencve"}}`,
+		"NeverApplied":  "",
+	} {
+		t.Run(name, func(t *testing.T) {
+			api := &fakeAPI{status: http.StatusOK, response: remoteWebhook}
+			cr := notification(notificationName, webhookSpec())
+			if applied != "" {
+				cr.Status.AtProvider.ConfigurationHash = appliedHash(t, applied)
+			}
+			if _, err := connect(t, api, webhookSecret()).Update(t.Context(), cr); err != nil {
+				t.Fatal(err)
+			}
+			assertReceived(t, api, request{Method: http.MethodPatch, Path: notificationPath, Body: map[string]any{
+				"is_enabled": true,
+				"configuration": map[string]any{
+					"extras":  map[string]any{"url": "https://hooks.example.com/opencve", "headers": map[string]any{"X-Token": "s3cr3t"}},
+					"types":   []any{"created"},
+					"metrics": map[string]any{"cvss31": "7"},
+				},
+			}})
+			got, err := connect(t, &fakeAPI{status: http.StatusOK, response: remoteWebhook}, webhookSecret()).Observe(t.Context(), cr)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if !got.ResourceUpToDate {
+				t.Errorf("observation after update = %+v, want up to date", got)
+			}
+		})
+	}
+}
+
 func TestUpdateSetsAtProviderFromResponse(t *testing.T) {
 	api := &fakeAPI{status: http.StatusOK, response: `{"id":"3fa85f64-5717-4562-b3fc-2c963f66afa6","name":"ops","type":"webhook","is_enabled":false,"is_pending_email_confirmation":null}`}
 	fp := webhookSpec()
 	fp.IsEnabled = ptr(false)
 	cr := notification(notificationName, fp)
-	cr.Status.AtProvider = v1alpha1.NotificationObservation{ID: "3fa85f64-5717-4562-b3fc-2c963f66afa6", Name: notificationName, Type: webhookType, IsEnabled: ptr(true), IsPendingEmailConfirmation: ptr(false)}
-	if _, err := connect(t, api).Update(t.Context(), cr); err != nil {
+	cr.Status.AtProvider = v1alpha1.NotificationObservation{ID: "3fa85f64-5717-4562-b3fc-2c963f66afa6", Name: notificationName, Type: webhookType, IsEnabled: ptr(true), IsPendingEmailConfirmation: ptr(false), ConfigurationHash: appliedHash(t, webhookConfiguration)}
+	if _, err := connect(t, api, webhookSecret()).Update(t.Context(), cr); err != nil {
 		t.Fatal(err)
 	}
-	want := v1alpha1.NotificationObservation{ID: "3fa85f64-5717-4562-b3fc-2c963f66afa6", Name: notificationName, Type: webhookType, IsEnabled: ptr(false)}
+	want := v1alpha1.NotificationObservation{ID: "3fa85f64-5717-4562-b3fc-2c963f66afa6", Name: notificationName, Type: webhookType, IsEnabled: ptr(false), ConfigurationHash: appliedHash(t, webhookConfiguration)}
 	if !reflect.DeepEqual(cr.Status.AtProvider, want) {
 		t.Errorf("atProvider\n got: %+v\nwant: %+v", cr.Status.AtProvider, want)
 	}
@@ -343,7 +416,7 @@ func TestUpdateSetsAtProviderFromResponse(t *testing.T) {
 
 func TestUpdateFailureIsAnError(t *testing.T) {
 	api := &fakeAPI{status: http.StatusBadRequest, response: `{"is_enabled":["invalid"]}`}
-	_, err := connect(t, api).Update(t.Context(), notification(notificationName, webhookSpec()))
+	_, err := connect(t, api, webhookSecret()).Update(t.Context(), notification(notificationName, webhookSpec()))
 	if err == nil || !strings.Contains(err.Error(), `update notification "ops"`) || !strings.Contains(err.Error(), "invalid") {
 		t.Errorf("error = %v, want the API's rejection naming the notification", err)
 	}

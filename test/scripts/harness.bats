@@ -150,3 +150,23 @@ else printf "%s\n200" "{\"subscriptions\":{\"vendors\":[\"apache\",\"linux\"],\"
   [ "$status" -eq 0 ]
   grep -q 'patch projectsubscriptions.subscription.opencve.m.clifton.quest/example-projectsubscriptions --type=merge -p {"spec":{"forProvider":{"vendors":\["apache","linux"\]}}}' kubectl.log
 }
+
+notification_hook() {
+  stub kubectl 'echo "$*" >> kubectl.log; echo "{\"status\":{\"atProvider\":{\"id\":\"n1\"}}}"'
+  stub curl 'n=$(cat n 2>/dev/null || echo 0); echo $((n + 1)) > n
+if [ "$n" = 0 ]; then printf "%s\n200" "{\"id\":\"n1\",\"type\":\"webhook\",\"is_enabled\":true,\"configuration\":{\"host\":\"example.com\",\"header_names\":[\"X-Source\"]}}"
+else printf "%s\n200" "{\"id\":\"'"$1"'\",\"type\":\"webhook\",\"is_enabled\":true,\"configuration\":{\"host\":\"example.org\",\"header_names\":[\"X-Source\"]}}"; fi'
+  PATH="$PWD/bin:$PATH" KUBECTL=kubectl OPENCVE_URL=http://h OPENCVE_TOKEN=tok OPENCVE_ORGANIZATION=org \
+    run bash "$ROOT/examples/namespaced/notification/v1alpha1/testhooks/notification-api.sh"
+}
+
+@test "notification hook changes the Secret itself after create and waits for the API to show the new host" {
+  notification_hook n1
+  [ "$status" -eq 0 ]
+  grep -q 'patch secret example-notification-configuration --type=merge -p {"stringData":{"configuration":"{\\"url\\": \\"https://example.org/opencve-webhook\\"' kubectl.log
+}
+
+@test "notification hook fails when the Secret change recreated the notification" {
+  notification_hook n2
+  [ "$status" -ne 0 ]
+}

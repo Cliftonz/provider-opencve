@@ -6,6 +6,7 @@ package notification
 
 import (
 	"context"
+	"crypto/sha256"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -48,7 +49,12 @@ func (e *external) Observe(ctx context.Context, cr *v1alpha1.Notification) (mana
 	if err := kit.CheckStatus(fmt.Sprintf("get notification %q", name), resp); err != nil {
 		return managed.ExternalObservation{}, err
 	}
+	_, hash, err := e.configuration(ctx, cr)
+	if err != nil {
+		return managed.ExternalObservation{}, err
+	}
 	at := observation(resp.JSON200)
+	at.ConfigurationHash = cr.Status.AtProvider.ConfigurationHash
 	cr.Status.AtProvider = at
 	fp := &cr.Spec.ForProvider
 	lateInitialized := fp.IsEnabled == nil && at.IsEnabled != nil
@@ -58,7 +64,7 @@ func (e *external) Observe(ctx context.Context, cr *v1alpha1.Notification) (mana
 	cr.SetConditions(xpv2.Available())
 	return managed.ExternalObservation{
 		ResourceExists:          true,
-		ResourceUpToDate:        reflect.DeepEqual(fp.IsEnabled, at.IsEnabled),
+		ResourceUpToDate:        reflect.DeepEqual(fp.IsEnabled, at.IsEnabled) && hash == at.ConfigurationHash,
 		ResourceLateInitialized: lateInitialized,
 	}, nil
 }
@@ -78,20 +84,11 @@ func observation(remote *opencve.Notification) v1alpha1.NotificationObservation 
 
 func (e *external) Create(ctx context.Context, cr *v1alpha1.Notification) (managed.ExternalCreation, error) {
 	fp := cr.Spec.ForProvider
-	body := opencve.NotificationWriteRequest{Name: fp.Name, Type: fp.Type, IsEnabled: fp.IsEnabled}
-	if ref := fp.ConfigurationSecretRef; ref != nil {
-		s := &corev1.Secret{}
-		if err := e.kube.Get(ctx, types.NamespacedName{Namespace: cr.GetNamespace(), Name: ref.Name}, s); err != nil {
-			return managed.ExternalCreation{}, err
-		}
-		raw, ok := s.Data[ref.Key]
-		if !ok {
-			return managed.ExternalCreation{}, fmt.Errorf("%w: key %q in Secret %q", errMissingConfigurationKey, ref.Key, ref.Name)
-		}
-		if err := json.Unmarshal(raw, &body.Configuration); err != nil {
-			return managed.ExternalCreation{}, fmt.Errorf("cannot decode configuration from key %q in Secret %q: %w", ref.Key, ref.Name, err)
-		}
+	configuration, hash, err := e.configuration(ctx, cr)
+	if err != nil {
+		return managed.ExternalCreation{}, err
 	}
+	body := opencve.NotificationWriteRequest{Name: fp.Name, Type: fp.Type, IsEnabled: fp.IsEnabled, Configuration: configuration}
 	resp, err := e.client.OrganizationsProjectsNotificationsCreateWithResponse(ctx, e.org, fp.ProjectName, body)
 	if err != nil {
 		return managed.ExternalCreation{}, err
@@ -100,14 +97,21 @@ func (e *external) Create(ctx context.Context, cr *v1alpha1.Notification) (manag
 		return managed.ExternalCreation{}, err
 	}
 	meta.SetExternalName(cr, fp.Name)
+	cr.Status.AtProvider.ConfigurationHash = hash
 	return managed.ExternalCreation{}, nil
 }
 
 func (e *external) Update(ctx context.Context, cr *v1alpha1.Notification) (managed.ExternalUpdate, error) {
 	fp := cr.Spec.ForProvider
-	resp, err := e.client.OrganizationsProjectsNotificationsPartialUpdateWithResponse(ctx, e.org, fp.ProjectName, meta.GetExternalName(cr), opencve.PatchedNotificationWriteRequest{
-		IsEnabled: fp.IsEnabled,
-	})
+	configuration, hash, err := e.configuration(ctx, cr)
+	if err != nil {
+		return managed.ExternalUpdate{}, err
+	}
+	body := opencve.PatchedNotificationWriteRequest{IsEnabled: fp.IsEnabled}
+	if hash != cr.Status.AtProvider.ConfigurationHash {
+		body.Configuration = configuration
+	}
+	resp, err := e.client.OrganizationsProjectsNotificationsPartialUpdateWithResponse(ctx, e.org, fp.ProjectName, meta.GetExternalName(cr), body)
 	if err != nil {
 		return managed.ExternalUpdate{}, err
 	}
@@ -115,7 +119,29 @@ func (e *external) Update(ctx context.Context, cr *v1alpha1.Notification) (manag
 		return managed.ExternalUpdate{}, err
 	}
 	cr.Status.AtProvider = observation(resp.JSON200)
+	cr.Status.AtProvider.ConfigurationHash = hash
 	return managed.ExternalUpdate{}, nil
+}
+
+func (e *external) configuration(ctx context.Context, cr *v1alpha1.Notification) (any, string, error) {
+	ref := cr.Spec.ForProvider.ConfigurationSecretRef
+	if ref == nil {
+		return nil, "", nil
+	}
+	s := &corev1.Secret{}
+	if err := e.kube.Get(ctx, types.NamespacedName{Namespace: cr.GetNamespace(), Name: ref.Name}, s); err != nil {
+		return nil, "", err
+	}
+	raw, ok := s.Data[ref.Key]
+	if !ok {
+		return nil, "", fmt.Errorf("%w: key %q in Secret %q", errMissingConfigurationKey, ref.Key, ref.Name)
+	}
+	var configuration any
+	if err := json.Unmarshal(raw, &configuration); err != nil {
+		return nil, "", fmt.Errorf("cannot decode configuration from key %q in Secret %q: %w", ref.Key, ref.Name, err)
+	}
+	canonical, _ := json.Marshal(configuration) //nolint:errchkjson // a value decoded from JSON always encodes
+	return configuration, fmt.Sprintf("%x", sha256.Sum256(canonical)), nil
 }
 
 func (e *external) Delete(ctx context.Context, cr *v1alpha1.Notification) (managed.ExternalDelete, error) {
