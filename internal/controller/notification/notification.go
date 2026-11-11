@@ -26,7 +26,10 @@ import (
 	"github.com/Cliftonz/provider-opencve/internal/controller/kit"
 )
 
-var errMissingConfigurationKey = errors.New("configuration key is missing")
+var (
+	errMissingConfigurationKey = errors.New("configuration key is missing")
+	errConfigurationNotObject  = errors.New("configuration is not a JSON object")
+)
 
 type external struct {
 	kube   client.Client
@@ -141,6 +144,9 @@ func (e *external) configuration(ctx context.Context, cr *v1alpha1.Notification)
 	var configuration any
 	if err := json.Unmarshal(raw, &configuration); err != nil {
 		return nil, "", fmt.Errorf("cannot decode configuration from key %q in Secret %q: %w", ref.Key, ref.Name, err)
+	}
+	if _, ok := configuration.(map[string]any); !ok {
+		return nil, "", fmt.Errorf("%w: key %q in Secret %q", errConfigurationNotObject, ref.Key, ref.Name)
 	}
 	canonical, _ := json.Marshal(configuration) //nolint:errchkjson // a value decoded from JSON always encodes
 	return configuration, fmt.Sprintf("%x", sha256.Sum256(canonical)), nil
