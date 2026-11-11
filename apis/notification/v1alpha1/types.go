@@ -38,8 +38,9 @@ type NotificationParameters struct {
 	IsEnabled *bool `json:"isEnabled,omitempty"`
 
 	// ConfigurationSecretRef selects a key, in a Secret in the notification's
-	// namespace, holding the notification configuration as JSON. It is sent only
-	// when the notification is created and cannot be changed.
+	// namespace, holding the notification configuration as JSON. The
+	// configuration is applied when the notification is created and whenever
+	// the Secret's content changes. The reference cannot be changed.
 	// +kubebuilder:validation:XValidation:rule="self == oldSelf",message="configurationSecretRef is immutable"
 	// +optional
 	ConfigurationSecretRef *xpv2.LocalSecretKeySelector `json:"configurationSecretRef,omitempty"`
@@ -51,6 +52,9 @@ type NotificationObservation struct {
 	Type                       string `json:"type,omitempty"`
 	IsEnabled                  *bool  `json:"isEnabled,omitempty"`
 	IsPendingEmailConfirmation *bool  `json:"isPendingEmailConfirmation,omitempty"`
+	// ConfigurationHash is the SHA-256 of the configuration last applied from
+	// the Secret, used to detect changes to its content.
+	ConfigurationHash string `json:"configurationHash,omitempty"`
 }
 
 type NotificationSpec struct {
