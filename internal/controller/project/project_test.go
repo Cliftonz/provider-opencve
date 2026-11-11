@@ -208,6 +208,17 @@ func TestObserveRemoteWithoutActiveDoesNotLateInitialize(t *testing.T) {
 	}
 }
 
+func TestObserveRemoteWithoutIDLeavesIDEmpty(t *testing.T) {
+	api := &fakeAPI{status: http.StatusOK, response: `{"name":"prod","description":"Production","active":true}`}
+	cr := project(projectName, v1alpha1.ProjectParameters{Name: projectName, Description: ptr("Production"), Active: ptr(true)})
+	if _, err := connectTo(t, api).Observe(t.Context(), cr); err != nil {
+		t.Fatal(err)
+	}
+	if cr.Status.AtProvider.ID != "" {
+		t.Errorf("atProvider.id = %q, want empty", cr.Status.AtProvider.ID)
+	}
+}
+
 func TestCreatePostsProjectAndSetsExternalName(t *testing.T) {
 	api := &fakeAPI{status: http.StatusCreated, response: `{"id":"3fa85f64-5717-4562-b3fc-2c963f66afa6","name":"prod","description":"Production","active":true}`}
 	cr := project("", v1alpha1.ProjectParameters{Name: projectName, Description: ptr("Production"), Active: ptr(true)})

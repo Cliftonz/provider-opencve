@@ -54,13 +54,16 @@ func (e *external) Observe(ctx context.Context, cr *v1alpha1.Project) (managed.E
 }
 
 func observation(remote *opencve.ProjectDetail) v1alpha1.ProjectObservation {
-	return v1alpha1.ProjectObservation{
-		ID:                 remote.Id.String(),
+	o := v1alpha1.ProjectObservation{
 		Name:               remote.Name,
 		Description:        kit.Optional(remote.Description),
 		Active:             remote.Active,
 		SubscriptionsCount: remote.SubscriptionsCount,
 	}
+	if remote.Id != nil {
+		o.ID = remote.Id.String()
+	}
+	return o
 }
 
 func (e *external) Create(ctx context.Context, cr *v1alpha1.Project) (managed.ExternalCreation, error) {
