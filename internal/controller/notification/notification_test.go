@@ -225,6 +225,16 @@ func TestObserveNullOrMissingRemoteValuesAreEmpty(t *testing.T) {
 	}
 }
 
+func TestObserveMissingRemoteIDIsEmpty(t *testing.T) {
+	cr := notification(notificationName, v1alpha1.NotificationParameters{ProjectName: projectName, Name: notificationName, Type: emailType})
+	if _, err := connect(t, &fakeAPI{status: http.StatusOK, response: `{"name":"ops","type":"email"}`}).Observe(t.Context(), cr); err != nil {
+		t.Fatal(err)
+	}
+	if cr.Status.AtProvider.ID != "" {
+		t.Errorf("atProvider.id = %q, want empty", cr.Status.AtProvider.ID)
+	}
+}
+
 func TestObserveLateInitializesIsEnabled(t *testing.T) {
 	api := &fakeAPI{status: http.StatusOK, response: `{"id":"3fa85f64-5717-4562-b3fc-2c963f66afa6","name":"ops","type":"email","is_enabled":false,"is_pending_email_confirmation":true}`}
 	cr := notification(notificationName, v1alpha1.NotificationParameters{ProjectName: projectName, Name: notificationName, Type: emailType})
