@@ -190,6 +190,9 @@ spec:
                 x-kubernetes-validations:
                 - message: projectName, projectNameRef or projectNameSelector is required
                   rule: has(self.projectName) || has(self.projectNameRef) || has(self.projectNameSelector)
+                - message: configurationSecretRef cannot be added or removed after
+                    creation
+                  rule: has(self.configurationSecretRef) == has(oldSelf.configurationSecretRef)
               managementPolicies:
                 default:
                 - '*'

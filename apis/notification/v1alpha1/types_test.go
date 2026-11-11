@@ -77,6 +77,37 @@ func TestCRD(t *testing.T) {
 		}
 	})
 
+	t.Run("ConfigurationSecretRefCannotBeAddedOrRemoved", func(t *testing.T) {
+		for name, tc := range map[string]struct {
+			before, after *xpv2.LocalSecretKeySelector
+		}{
+			"add-ref":    {after: secretRef(notificationName)},
+			"remove-ref": {before: secretRef(notificationName)},
+		} {
+			n := notification(name, v1alpha1.NotificationParameters{ProjectName: "prod", Name: notificationName, Type: webhookType, ConfigurationSecretRef: tc.before})
+			if err := kube.Create(t.Context(), n); err != nil {
+				t.Fatal(err)
+			}
+			n.Spec.ForProvider.ConfigurationSecretRef = tc.after
+			err := kube.Update(t.Context(), n)
+			if err == nil || !strings.Contains(err.Error(), "configurationSecretRef cannot be added or removed after creation") {
+				t.Errorf("%s: update error = %v, want configurationSecretRef cannot be added or removed after creation", name, err)
+			}
+		}
+	})
+
+	t.Run("UnchangedConfigurationSecretRefIsAccepted", func(t *testing.T) {
+		n := notification("keep-ref", v1alpha1.NotificationParameters{ProjectName: "prod", Name: notificationName, Type: webhookType, ConfigurationSecretRef: secretRef(notificationName)})
+		if err := kube.Create(t.Context(), n); err != nil {
+			t.Fatal(err)
+		}
+		enabled := false
+		n.Spec.ForProvider.IsEnabled = &enabled
+		if err := kube.Update(t.Context(), n); err != nil {
+			t.Errorf("update error = %v, want the update accepted", err)
+		}
+	})
+
 	t.Run("ProjectIsRequired", func(t *testing.T) {
 		err := kube.Create(t.Context(), notification("no-project", v1alpha1.NotificationParameters{Name: notificationName, Type: webhookType}))
 		if err == nil || !strings.Contains(err.Error(), ": projectName, projectNameRef or projectNameSelector is required") {

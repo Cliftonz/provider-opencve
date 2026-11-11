@@ -11,6 +11,7 @@ import (
 )
 
 // +kubebuilder:validation:XValidation:rule="has(self.projectName) || has(self.projectNameRef) || has(self.projectNameSelector)",message="projectName, projectNameRef or projectNameSelector is required"
+// +kubebuilder:validation:XValidation:rule="has(self.configurationSecretRef) == has(oldSelf.configurationSecretRef)",message="configurationSecretRef cannot be added or removed after creation"
 type NotificationParameters struct {
 	// ProjectName is the name of the project owning the notification. It cannot be changed.
 	// +crossplane:generate:reference:type=github.com/Cliftonz/provider-opencve/apis/project/v1alpha1.Project
