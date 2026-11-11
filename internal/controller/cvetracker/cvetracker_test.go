@@ -256,6 +256,14 @@ func TestUpdateRejected(t *testing.T) {
 	}
 }
 
+func TestUpdateWrongTrackerShapeFails(t *testing.T) {
+	e, _ := server(t, projectCve(`{"status":7}`))
+	_, err := e.Update(context.Background(), tracker(nil, nil))
+	if err == nil || !strings.Contains(err.Error(), `"status"`) {
+		t.Fatalf(`Update() error = %v, want an error naming "status"`, err)
+	}
+}
+
 func TestDeleteLeavesRemoteUntouched(t *testing.T) {
 	e, got := server(t, reply{Status: http.StatusOK, Body: `{}`})
 	if _, err := e.Delete(context.Background(), tracker(nil, nil)); err != nil {
