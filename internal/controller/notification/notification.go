@@ -77,10 +77,12 @@ func (e *external) Observe(ctx context.Context, cr *v1alpha1.Notification) (mana
 
 func observation(remote *opencve.Notification) v1alpha1.NotificationObservation {
 	at := v1alpha1.NotificationObservation{
-		ID:        remote.Id.String(),
 		Name:      remote.Name,
 		Type:      remote.Type,
 		IsEnabled: remote.IsEnabled,
+	}
+	if remote.Id != nil {
+		at.ID = remote.Id.String()
 	}
 	if pending, err := remote.IsPendingEmailConfirmation.Get(); err == nil {
 		at.IsPendingEmailConfirmation = &pending
