@@ -84,7 +84,7 @@ func observation(remote *opencve.Notification) v1alpha1.NotificationObservation 
 
 func (e *external) Create(ctx context.Context, cr *v1alpha1.Notification) (managed.ExternalCreation, error) {
 	fp := cr.Spec.ForProvider
-	configuration, hash, err := e.configuration(ctx, cr)
+	configuration, _, err := e.configuration(ctx, cr)
 	if err != nil {
 		return managed.ExternalCreation{}, err
 	}
@@ -97,7 +97,6 @@ func (e *external) Create(ctx context.Context, cr *v1alpha1.Notification) (manag
 		return managed.ExternalCreation{}, err
 	}
 	meta.SetExternalName(cr, fp.Name)
-	cr.Status.AtProvider.ConfigurationHash = hash
 	return managed.ExternalCreation{}, nil
 }
 

@@ -120,8 +120,8 @@ func webhookSecretWith(configuration string) *corev1.Secret {
 
 func appliedHash(t *testing.T, configuration string) string {
 	t.Helper()
-	cr := notification("", webhookSpec())
-	if _, err := connect(t, &fakeAPI{status: http.StatusCreated, response: remoteWebhook}, webhookSecretWith(configuration)).Create(t.Context(), cr); err != nil {
+	cr := notification(notificationName, webhookSpec())
+	if _, err := connect(t, &fakeAPI{status: http.StatusOK, response: remoteWebhook}, webhookSecretWith(configuration)).Update(t.Context(), cr); err != nil {
 		t.Fatal(err)
 	}
 	return cr.Status.AtProvider.ConfigurationHash
@@ -333,23 +333,6 @@ func TestCreateWithInvalidConfigurationJSONWrapsTheDecodeError(t *testing.T) {
 		t.Errorf("error = %v, want a wrapped JSON syntax error naming key configuration and Secret ops-webhook", err)
 	}
 	assertReceived(t, api)
-}
-
-func TestCreateRecordsTheAppliedConfiguration(t *testing.T) {
-	cr := notification("", webhookSpec())
-	if _, err := connect(t, &fakeAPI{status: http.StatusCreated, response: remoteWebhook}, webhookSecret()).Create(t.Context(), cr); err != nil {
-		t.Fatal(err)
-	}
-	for configuration, want := range map[string]bool{webhookConfiguration: true, `{"extras":{"url":"https://new.example.com/opencve"}}`: false} {
-		observed := cr.DeepCopy()
-		got, err := connect(t, &fakeAPI{status: http.StatusOK, response: remoteWebhook}, webhookSecretWith(configuration)).Observe(t.Context(), observed)
-		if err != nil {
-			t.Fatal(err)
-		}
-		if got.ResourceUpToDate != want {
-			t.Errorf("Secret %s: up to date = %t, want %t", configuration, got.ResourceUpToDate, want)
-		}
-	}
 }
 
 func TestUpdatePatchesIsEnabledOnlyWhenTheConfigurationIsApplied(t *testing.T) {
