@@ -98,6 +98,22 @@ func TestObserveExists(t *testing.T) {
 	}
 }
 
+func TestObserveExistsWithoutIDOrTimestamps(t *testing.T) {
+	e, _ := serve(t, http.StatusOK, `{"name": "acme"}`)
+	cr := &v1alpha1.Organization{}
+
+	got, err := e.Observe(context.Background(), cr)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if diff := cmp.Diff(managed.ExternalObservation{ResourceExists: true, ResourceUpToDate: true}, got); diff != "" {
+		t.Errorf("observation (-want +got):\n%s", diff)
+	}
+	if diff := cmp.Diff(v1alpha1.OrganizationObservation{Name: "acme"}, cr.Status.AtProvider); diff != "" {
+		t.Errorf("atProvider (-want +got):\n%s", diff)
+	}
+}
+
 func TestObserveServerError(t *testing.T) {
 	e, requests := serve(t, http.StatusInternalServerError, `{"detail":"boom"}`)
 
