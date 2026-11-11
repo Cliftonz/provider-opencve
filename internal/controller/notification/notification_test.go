@@ -348,6 +348,17 @@ func TestCreateWithInvalidConfigurationJSONWrapsTheDecodeError(t *testing.T) {
 	assertReceived(t, api)
 }
 
+func TestCreateWithNonObjectConfigurationIsANamedError(t *testing.T) {
+	for _, configuration := range []string{`null`, `[]`, `"https://hooks.example.com/opencve"`, `7`, `true`} {
+		api := &fakeAPI{status: http.StatusCreated, response: remoteWebhook}
+		_, err := connect(t, api, webhookSecretWith(configuration)).Create(t.Context(), notification("", webhookSpec()))
+		if !errors.Is(err, errConfigurationNotObject) || !strings.Contains(err.Error(), `"configuration"`) || !strings.Contains(err.Error(), `"ops-webhook"`) {
+			t.Errorf("configuration %s: error = %v, want errConfigurationNotObject naming key configuration and Secret ops-webhook", configuration, err)
+		}
+		assertReceived(t, api)
+	}
+}
+
 func TestUpdatePatchesIsEnabledOnlyWhenTheConfigurationIsApplied(t *testing.T) {
 	api := &fakeAPI{status: http.StatusOK, response: remoteWebhook}
 	fp := webhookSpec()
