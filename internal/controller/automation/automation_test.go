@@ -444,6 +444,25 @@ func TestObserveDoesNotLateInitializeWhatTheRemoteOmits(t *testing.T) {
 	}
 }
 
+func TestObserveWithoutIDLeavesIDEmpty(t *testing.T) {
+	var remote map[string]any
+	if err := json.Unmarshal([]byte(remoteReport), &remote); err != nil {
+		t.Fatal(err)
+	}
+	delete(remote, "id")
+	body, err := json.Marshal(remote)
+	if err != nil {
+		t.Fatal(err)
+	}
+	cr := automation(automationName, reportSpec())
+	if _, err := connect(t, &fakeAPI{status: http.StatusOK, response: string(body)}).Observe(t.Context(), cr); err != nil {
+		t.Fatal(err)
+	}
+	if cr.Status.AtProvider.ID != "" {
+		t.Errorf("atProvider.id = %q, want empty", cr.Status.AtProvider.ID)
+	}
+}
+
 func TestObserveInvalidSpecConfigurationIsAnError(t *testing.T) {
 	fp := reportSpec()
 	fp.Configuration = raw(`{"conditions":`)

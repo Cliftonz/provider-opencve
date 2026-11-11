@@ -75,7 +75,6 @@ func observation(remote *opencve.Automation) (v1alpha1.AutomationObservation, er
 		return v1alpha1.AutomationObservation{}, err
 	}
 	at := v1alpha1.AutomationObservation{
-		ID:               remote.Id.String(),
 		Name:             remote.Name,
 		IsEnabled:        remote.IsEnabled,
 		TriggerType:      (*string)(remote.TriggerType),
@@ -84,6 +83,9 @@ func observation(remote *opencve.Automation) (v1alpha1.AutomationObservation, er
 		ScheduleTime:     kit.Optional(remote.ScheduleTime),
 		ScheduleWeekday:  weekday,
 		ConditionsCount:  remote.ConditionsCount,
+	}
+	if remote.Id != nil {
+		at.ID = remote.Id.String()
 	}
 	if remote.Configuration != nil {
 		configuration, err := json.Marshal(remote.Configuration)
