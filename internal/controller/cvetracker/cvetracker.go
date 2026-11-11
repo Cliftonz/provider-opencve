@@ -45,7 +45,10 @@ func (e *external) Observe(ctx context.Context, cr *v1alpha1.CveTracker) (manage
 	if err := kit.CheckStatus(fmt.Sprintf("get CVE tracker %q", fp.CveID), resp); err != nil {
 		return managed.ExternalObservation{}, err
 	}
-	at := observation(resp.JSON200)
+	at, err := observation(resp.JSON200)
+	if err != nil {
+		return managed.ExternalObservation{}, err
+	}
 	cr.Status.AtProvider = at
 	cr.SetConditions(xpv2.Available())
 	return managed.ExternalObservation{
@@ -54,25 +57,42 @@ func (e *external) Observe(ctx context.Context, cr *v1alpha1.CveTracker) (manage
 	}, nil
 }
 
-func observation(remote *opencve.ApiProjectCve) v1alpha1.CveTrackerObservation {
+func observation(remote *opencve.ApiProjectCve) (v1alpha1.CveTrackerObservation, error) {
 	var tracker map[string]any
 	if remote.Tracker.IsSpecified() && !remote.Tracker.IsNull() {
 		tracker = remote.Tracker.MustGet()
 	}
+	status, err := field[string](tracker, "status")
+	if err != nil {
+		return v1alpha1.CveTrackerObservation{}, err
+	}
+	assignee, err := field[map[string]any](tracker, "assignee")
+	if err != nil {
+		return v1alpha1.CveTrackerObservation{}, err
+	}
+	email, err := field[string](assignee, "email")
+	if err != nil {
+		return v1alpha1.CveTrackerObservation{}, err
+	}
 	return v1alpha1.CveTrackerObservation{
 		CveID:    remote.CveId,
 		Title:    kit.Value(kit.Optional(remote.Title)),
-		Status:   field[string](tracker, "status"),
-		Assignee: field[string](field[map[string]any](tracker, "assignee"), "email"),
-	}
+		Status:   status,
+		Assignee: email,
+	}, nil
 }
 
-func field[T any](m map[string]any, key string) T {
+func field[T any](m map[string]any, key string) (T, error) {
 	var zero T
-	if v := m[key]; v != nil {
-		return v.(T)
+	v := m[key]
+	if v == nil {
+		return zero, nil
 	}
-	return zero
+	t, ok := v.(T)
+	if !ok {
+		return zero, fmt.Errorf("tracker field %q is %T, want %T", key, v, zero)
+	}
+	return t, nil
 }
 
 func (e *external) Create(_ context.Context, _ *v1alpha1.CveTracker) (managed.ExternalCreation, error) {
@@ -95,7 +115,11 @@ func (e *external) Update(ctx context.Context, cr *v1alpha1.CveTracker) (managed
 	if err := kit.CheckStatus(fmt.Sprintf("update CVE tracker %q", fp.CveID), resp); err != nil {
 		return managed.ExternalUpdate{}, err
 	}
-	cr.Status.AtProvider = observation(resp.JSON200)
+	at, err := observation(resp.JSON200)
+	if err != nil {
+		return managed.ExternalUpdate{}, err
+	}
+	cr.Status.AtProvider = at
 	return managed.ExternalUpdate{}, nil
 }
 
