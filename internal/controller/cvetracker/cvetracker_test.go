@@ -182,14 +182,24 @@ func TestObserveDeletedIsAbsent(t *testing.T) {
 	}
 }
 
-func TestObserveWrongTrackerShapePanics(t *testing.T) {
-	e, _ := server(t, projectCve(`{"status":7,"assignee":null}`))
-	defer func() {
-		if recover() == nil {
-			t.Error("Observe() did not panic for a non-string status")
-		}
-	}()
-	_, _ = e.Observe(context.Background(), tracker(nil, nil))
+func TestObserveWrongTrackerShapeFails(t *testing.T) {
+	cases := map[string]struct {
+		tracker string
+		field   string
+	}{
+		"NonStringStatus":        {tracker: `{"status":7,"assignee":null}`, field: `"status"`},
+		"NonMapAssignee":         {tracker: `{"status":"to_evaluate","assignee":"user@example.com"}`, field: `"assignee"`},
+		"NonStringAssigneeEmail": {tracker: `{"status":"to_evaluate","assignee":{"email":7}}`, field: `"email"`},
+	}
+	for name, tc := range cases {
+		t.Run(name, func(t *testing.T) {
+			e, _ := server(t, projectCve(tc.tracker))
+			_, err := e.Observe(context.Background(), tracker(nil, nil))
+			if err == nil || !strings.Contains(err.Error(), tc.field) {
+				t.Fatalf("Observe() error = %v, want an error naming %s", err, tc.field)
+			}
+		})
+	}
 }
 
 func TestCreateFails(t *testing.T) {
