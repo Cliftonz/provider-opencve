@@ -147,7 +147,20 @@ $(SETUP_ENVTEST):
 test-envtest: $(SETUP_ENVTEST)
 	@KUBEBUILDER_ASSETS="$$($(SETUP_ENVTEST) use $(ENVTEST_K8S_VERSION) --bin-dir $(TOOLS_HOST_DIR)/envtest -p path)" $(GOHOST) test -tags envtest ./...
 
-.PHONY: submodules fallthrough run crd-breaking-changes test-scripts test-envtest
+GOVULNCHECK_VERSION = v1.9.0
+GOVULNCHECK := $(TOOLS_HOST_DIR)/govulncheck-$(GOVULNCHECK_VERSION)
+$(GOVULNCHECK):
+	@$(INFO) installing govulncheck $(GOVULNCHECK_VERSION)
+	@mkdir -p $(TOOLS_HOST_DIR)/tmp-govulncheck
+	@GOBIN=$(TOOLS_HOST_DIR)/tmp-govulncheck $(GOHOST) install golang.org/x/vuln/cmd/govulncheck@$(GOVULNCHECK_VERSION)
+	@mv $(TOOLS_HOST_DIR)/tmp-govulncheck/govulncheck $(GOVULNCHECK)
+	@rm -fr $(TOOLS_HOST_DIR)/tmp-govulncheck
+	@$(OK) installing govulncheck $(GOVULNCHECK_VERSION)
+
+vulncheck: $(GOVULNCHECK)
+	@$(GOVULNCHECK) ./...
+
+.PHONY: submodules fallthrough run crd-breaking-changes test-scripts test-envtest vulncheck
 
 # ====================================================================================
 # Special Targets
