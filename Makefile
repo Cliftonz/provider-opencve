@@ -133,9 +133,9 @@ test-scripts: $(BATS) $(CRDDIFF)
 	@git ls-files '*.sh' | xargs shellcheck
 	@CRDDIFF=$(CRDDIFF) $(BATS) test/scripts
 
-SETUP_ENVTEST_VERSION = v0.24.1
+SETUP_ENVTEST_VERSION = v0.25.3
 SETUP_ENVTEST := $(TOOLS_HOST_DIR)/setup-envtest-$(SETUP_ENVTEST_VERSION)
-ENVTEST_K8S_VERSION = 1.36.x
+ENVTEST_K8S_VERSION = 1.37.x
 $(SETUP_ENVTEST):
 	@$(INFO) installing setup-envtest $(SETUP_ENVTEST_VERSION)
 	@mkdir -p $(TOOLS_HOST_DIR)/tmp-setup-envtest
